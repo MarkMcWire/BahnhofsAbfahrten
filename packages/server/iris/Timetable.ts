@@ -27,7 +27,7 @@ import messageLookup, {
   supersededMessages,
 } from './messageLookup';
 import xmljs from 'libxmljs2';
-import type { AbfahrtenResult, IrisMessage } from 'types/iris';
+import type { AbfahrtenResult, IrisMessage, Messages } from 'types/iris';
 import type { AxiosInstance } from 'axios';
 import type { Element } from 'libxmljs2';
 
@@ -132,9 +132,9 @@ function parseRawId(rawId: string) {
     id: (idMatch && idMatch[1]) || rawId,
     mediumId: (mediumIdMatch && mediumIdMatch[1]) || rawId,
     initialDeparture:
-      (initialDepartureMatch &&
-        parse(initialDepartureMatch[1], 'yyMMddHHmm', Date.now()).getTime()) ||
-      '',
+      initialDepartureMatch && initialDepartureMatch[1]
+        ? parse(initialDepartureMatch[1], 'yyMMddHHmm', Date.now())
+        : undefined,
   };
 }
 
@@ -182,17 +182,6 @@ export default class Timetable {
         timetable.departure.cancelled &&
         (!timetable.arrival || !timetable.arrival.scheduledTime));
 
-    // if (timetable.cancelled) {
-    //   const anyCancelled =
-    //     timetable.routePre.some((r: any) => r.cancelled) ||
-    //     timetable.routePost.some((r: any) => r.cancelled);
-
-    //   if (anyCancelled) {
-    //     timetable.routePre.forEach((r: any) => (r.cancelled = true));
-    //     timetable.routePost.forEach((r: any) => (r.cancelled = true));
-    //   }
-    // }
-
     timetable.messages.him = timetable.messages.him.filter((m: any) => m.text);
 
     const currentRoutePart = {
@@ -215,6 +204,12 @@ export default class Timetable {
     calculateVia(timetable.routePost);
 
     if (timetable.departure) {
+      if (
+        !timetable.departure.cancelled &&
+        timetable.destination === timetable.currentStation.title
+      ) {
+        timetable.departure.cancelled = true;
+      }
       timetable.platform = timetable.departure.platform;
       timetable.scheduledPlatform = timetable.departure.scheduledPlatform;
     } else if (timetable.arrival) {
@@ -271,9 +266,10 @@ export default class Timetable {
 
         if (
           referenceTrain &&
-          (referenceTrain.arrival?.scheduledTime === a.arrival?.scheduledTime ||
-            referenceTrain.departure?.scheduledTime ===
-              a.departure?.scheduledTime)
+          (referenceTrain.arrival?.scheduledTime.getTime() ===
+            a.arrival?.scheduledTime.getTime() ||
+            referenceTrain.departure?.scheduledTime.getTime() ===
+              a.departure?.scheduledTime.getTime())
         ) {
           wings[a.mediumId] = a;
           this.computeExtra(a);
@@ -286,7 +282,7 @@ export default class Timetable {
       const arrival = a.arrival && a.arrival.time;
       const scheduledDeparture = a.departure && a.departure.scheduledTime;
       const departure = a.departure && a.departure.time;
-      const time: number =
+      const time: Date =
         a.departure && a.departure.cancelled
           ? scheduledArrvial || scheduledDeparture
           : scheduledDeparture || scheduledArrvial;
@@ -334,9 +330,12 @@ export default class Timetable {
     if (!himMessage) return undefined;
     if (!himMessage.affectedProducts.some((p) => p.name.endsWith(trainNumber)))
       return undefined;
-    const now = Date.now();
+    const now = new Date();
 
-    if (now < himMessage.startTime || now > himMessage.endTime) {
+    if (
+      isBefore(now, himMessage.startTime) ||
+      isAfter(now, himMessage.endTime)
+    ) {
       return undefined;
     }
 
@@ -459,7 +458,7 @@ export default class Timetable {
         );
 
         return agg;
-      }, {} as { [key: string]: any[] }),
+      }, {} as Messages),
       arrival: parseRealtimeAr(ar),
       departure: parseRealtimeDp(dp),
       ref: ref ? this.parseRef(ref) : undefined,

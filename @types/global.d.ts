@@ -24,7 +24,12 @@ declare global {
       };
       // test only
       nock: nock.Scope;
+      parseJson<T = unknown>(json: string): T;
     }
+  }
+
+  interface Navigator {
+    standalone?: boolean;
   }
 
   type ExcludesFalse = <T>(x: T | undefined | void | null | false) => x is T;

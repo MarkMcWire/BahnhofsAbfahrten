@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/node';
 import { middlewares } from './logger';
 import Axios from 'axios';
 import createAdmin from './admin';
-import createDocsServer from './docsServer';
 import http from 'http';
 import Koa from 'koa';
 import KoaBodyparser from 'koa-bodyparser';
@@ -33,7 +32,6 @@ export function createApp(): Koa {
   }
 
   let apiRoutes = require('./API').default;
-  let validationOverwrites = require('./API/validationOverwrites').default;
   let serverRender = require('./render').default;
   let seoController = require('./seo').default;
   let errorHandler = require('./errorHandler').default;
@@ -56,7 +54,6 @@ export function createApp(): Koa {
           errorHandler = require('./errorHandler').default;
           serverRender = require('./render').default;
           apiRoutes = require('./API').default;
-          validationOverwrites = require('./API/validationOverwrites').default;
           seoController = require('./seo').default;
           ctx.loadableStats = JSON.parse(
             // eslint-disable-next-line no-sync
@@ -77,7 +74,6 @@ export function createApp(): Koa {
     middlewares.forEach((m) => app.use(m));
     app.use(KoaBodyparser());
 
-    app.use(hotHelper(() => validationOverwrites.routes()));
     app.use(hotHelper(() => apiRoutes.routes()));
 
     app.use(
@@ -146,11 +142,6 @@ export default (): http.Server => {
     console.log('running in DEV mode!');
   } else {
     createAdmin();
-  }
-
-  // istanbul ignore next
-  if (process.env.NODE_ENV !== 'TEST') {
-    createDocsServer(Number.parseInt(process.env.DOCS_PORT || '9023', 10));
   }
 
   return server;

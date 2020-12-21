@@ -1,9 +1,10 @@
 /* eslint-disable array-callback-return */
 /* eslint-disable no-fallthrough */
+import { format } from 'date-fns';
 import { getAbfahrten } from 'server/iris';
-import { getWRLink, WRCache } from 'server/Reihung/hasWR';
 import { isRedesignByTZ, isRedesignByUIC } from 'server/Reihung/tzInfo';
 import { maxBy, minBy } from 'client/util';
+import { utcToZonedTime } from 'date-fns-tz';
 import Axios from 'axios';
 import getBR from 'server/Reihung/getBR';
 import TrainNames from 'server/Reihung/TrainNames';
@@ -15,6 +16,17 @@ import type {
   Formation,
   Wagenreihung,
 } from 'types/reihung';
+
+const formatDate = (date: Date) =>
+  format(utcToZonedTime(date, 'Europe/Berlin'), 'yyyyMMddHHmm');
+
+// https://ist-wr.noncd.db.de/wagenreihung/1.0/
+// https://www.apps-bahn.de/wr/wagenreihung/1.0/
+export const getWRLink = (trainNumber: string, date: Date): string => {
+  return `https://www.apps-bahn.de/wr/wagenreihung/1.0/${trainNumber}/${formatDate(
+    date,
+  )}`;
+};
 
 const countryMapping: any = {
   80: 'DE',
@@ -82,7 +94,7 @@ const ICE1LDV = (br: BRInfo, fahrzeuge: Fahrzeug[]): void => {
 
 const specificBR = (fahrzeuge: Fahrzeug[], formation: Formation): BRInfo => {
   for (const f of fahrzeuge) {
-    const br = getBR(f.fahrzeugnummer);
+    const br = getBR(f.fahrzeugnummer, fahrzeuge.length);
 
     if (br) return br;
   }
@@ -130,7 +142,9 @@ const getComfortSeats = (br: BRInfo, klasse: 1 | 2) => {
       return klasse === 1 ? '21-26, 31, 33, 35' : '31-55, 57';
     case '411':
       return klasse === 1 ? '41, 46, 52, 54-56' : '92, 94, 96, 98, 101-118';
-    case '412':
+    case '412.7':
+      return klasse === 1 ? '44-53' : '11-44';
+    case '412.12':
       return klasse === 1 ? '11-46' : '11-68';
     case '415':
       return klasse === 1 ? '52, 54, 56' : '81-88, 91-98';
@@ -168,7 +182,9 @@ const getDisabledSeats = (
       return klasse === 1 ? '13, 15' : '11, 13, 15, 17';
     case '411':
       return klasse === 1 ? '21, 22' : '15-18';
-    case '412':
+    case '412.7':
+      return klasse === 1 ? '12, 13' : '11-18';
+    case '412.12':
       if (klasse === 1)
         return wagenordnungsnummer === '10' ? '12, 13' : '11, 14, 21';
 
@@ -299,7 +315,7 @@ const wrFetchTimeout = process.env.NODE_ENV === 'production' ? 2500 : 10000;
 // https://www.apps-bahn.de/wr/wagenreihung/1.0/6/201802021930
 export async function wagenreihung(
   trainNumber: string,
-  date: number,
+  date: Date,
   retry = 2,
 ): Promise<Formation> {
   let info: Wagenreihung;
@@ -324,11 +340,7 @@ export async function wagenreihung(
         },
       };
     }
-    if (e.response?.data?.tryThese) {
-      if (!(await WRCache.exists(trainNumber))) {
-        await WRCache.set(trainNumber, null);
-      }
-    }
+
     throw {
       response: {
         status: 404,
@@ -363,7 +375,7 @@ export async function wagenreihung(
   );
 
   if (!reallyHasReihung) {
-    throw { status: 404 };
+    throw { status: 404, statusText: 'Data invalid' };
   }
 
   const isActuallyIC =
@@ -460,7 +472,7 @@ export async function wagenreihung(
   return enrichedFormation;
 }
 
-function wagenReihungSpecificMonitoring(id: string, departure: number) {
+function wagenReihungSpecificMonitoring(id: string, departure: Date) {
   return wagenreihung(id, departure);
 }
 

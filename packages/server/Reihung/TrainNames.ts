@@ -83,6 +83,7 @@ const naming = {
   226: 'Lutherstadt Wittenberg',
   227: 'Ludwigslust',
   228: 'Altenburg',
+  229: 'Templin',
   230: 'Delitzsch',
   231: 'Brandenburg an der Havel',
   232: 'Frankfurt (Oder)',
@@ -261,6 +262,7 @@ const naming = {
   9026: 'Zürichsee',
   9028: 'Freistaat Sachsen',
   9041: 'Baden-Württemberg',
+  9050: 'Metropole Ruhr',
 };
 
 export default (tzn?: string): string | undefined => {
